@@ -10,11 +10,11 @@ Folder Setup
 	The filepath for the project folder should be entered as the input (and possibly output) on HeatPi.
 
 Library Installation
-deareis==4.2.1
-matplotlib==3.8.4
-numpy==1.24.3
-pandas==2.0.3
-seaborn==0.13.2
+	deareis==4.2.1
+	matplotlib==3.8.4
+	numpy==1.24.3
+	pandas==2.0.3
+	seaborn==0.13.2
 
 App Details
 	Global Settings:
