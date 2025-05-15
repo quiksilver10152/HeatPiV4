@@ -4,7 +4,7 @@ Created on Wed May 14 18:47:04 2025
 
 @author: quiks and Gemini 2.5 Pro
 
-EIS Analysis Suite - Final Version with Custom Output Options
+HeatPiV4
 """
 
 import os
@@ -25,7 +25,7 @@ import seaborn as sns
 matplotlib.use('Agg') 
 
 # ---------------------------------------------------------
-# HELPER FUNCTIONS ---
+# --- HELPER FUNCTIONS ---
 # ---------------------------------------------------------
 
 def sanitize_filename(name_str, max_len=40):
@@ -39,7 +39,6 @@ def sanitize_filename(name_str, max_len=40):
     sane_name = re.sub(r'_+', "_", sane_name)
     # Truncate if too long (ensure it doesn't break extension if added later)
     return sane_name[:max_len].strip('_')
-
 
 def detect_num_replicates(input_dir, gui_replicates_fallback):
     """Counts subdirectories in input_dir to determine N. Falls back to GUI value."""
@@ -230,7 +229,7 @@ def get_spaced_ticks_and_labels(data_axis_len, custom_labels_str, max_ticks=15, 
         return ticks, custom_labels
 
 # ---------------------------------------------------------
-# ANALYSIS FUNCTION 1: Raw Variables & Standard Deviations ---
+# --- ANALYSIS FUNCTION 1: Raw Variables & Standard Deviations ---
 # ---------------------------------------------------------
 def run_analysis_1(input_dir, output_dir, N_replicates_from_gui, 
                    apply_day0_norm_global, average_replicates_global, heatmap_norm_strategy,
@@ -480,12 +479,14 @@ def run_analysis_drt(input_dir, output_dir, N_replicates_from_gui,
 
     for lambda_val_idx, lambda_val in enumerate(lambda_values_list):
         # ... (DRT settings setup, prelim_ecm_fit calculation, all_files_drt_data_current_lambda population)
+        # ... (This inner part is complex and needs the full logic from previous working version)
         if stop_event.is_set(): return f"DRT Cancelled before lambda {lambda_val}"
         logging.info(f"Processing DRT for Lambda ({lambda_val_idx+1}/{len(lambda_values_list)}): {lambda_val}")
         
         all_files_drt_data_current_lambda = [] 
         processed_a_file_this_lambda = False
         for rep_idx, replicate_folder_name in enumerate(replicate_folders):
+            # ... (file iteration logic for this replicate folder, as in previous complete DRT function)
             if stop_event.is_set(): break # Break from replicate loop
             current_path = os.path.join(input_dir, replicate_folder_name) if replicate_folder_name else input_dir
             current_replicate_id = replicate_folder_name if replicate_folder_name else f"rep{rep_idx}"
@@ -501,7 +502,7 @@ def run_analysis_drt(input_dir, output_dir, N_replicates_from_gui,
                     eis_data_list = deareis.parse_data(filepath)
                     if not eis_data_list: continue
                     
-                    # Preliminary ECM fit (quik's fix for DRT fit requirement)
+                    # Preliminary ECM fit (user's fix for DRT fit requirement)
                     prelim_fit_settings = deareis.FitSettings(mrq_fit_cdc_string or "R", method='AUTO', weight='AUTO', max_nfev=10000)
                     prelim_ecm_fit_obj = deareis.fit_circuit(eis_data_list[0], prelim_fit_settings)
                     
@@ -527,6 +528,7 @@ def run_analysis_drt(input_dir, output_dir, N_replicates_from_gui,
         if stop_event.is_set() or not processed_a_file_this_lambda or not first_file_processed_for_taus_overall: continue # to next lambda
 
         # --- DataFrame creation, Day0, Averaging/Per-Rep, CSV, Heatmap Norm, Plotting ---
+        # (This part follows the pattern established in run_analysis_1 for dfs_for_main_heatmaps)
         tau_col_names = [f"tau_{tau_val:.3E}" for tau_val in common_tau_values_overall]
         gamma_records = [{'day': r['day'], 'replicate_id': r['replicate_id'], **{tau_col_names[i]: r['gammas'][i] for i in range(len(common_tau_values_overall))}} for r in all_files_drt_data_current_lambda]
         if not gamma_records: continue
@@ -540,6 +542,7 @@ def run_analysis_drt(input_dir, output_dir, N_replicates_from_gui,
         dfs_for_drt_heatmaps_this_lambda = {}
         if average_replicates_global: # Generate one "averaged" dataset
             if N_replicates > 0 and not processed_df_lambda.empty and data_cols_drt:
+                # ... (averaging logic as in A1) ...
                 df_for_avg = processed_df_lambda.sort_values(by=['day', 'replicate_id']).reset_index(drop=True)
                 if len(df_for_avg) >= N_replicates:
                     avg_num = df_for_avg[data_cols_drt].groupby(np.arange(len(df_for_avg)) // N_replicates).mean()
@@ -593,11 +596,11 @@ def run_analysis_drt(input_dir, output_dir, N_replicates_from_gui,
 
 
 # ---------------------------------------------------------
-# ANALYSIS FUNCTION 3: ECM Fitting  ---
+# --- ANALYSIS FUNCTION 3: ECM Fitting --- 
 # ---------------------------------------------------------
 def run_analysis_ecm_fitting(input_dir, output_dir, N_replicates_from_gui, 
                              apply_day0_norm_global, average_replicates_global, heatmap_norm_strategy,
-                             custom_title_prefix, include_auto_titles, custom_x_labels, custom_x_axis_title, 
+                             custom_title_prefix, include_auto_titles, custom_x_labels, custom_x_axis_title, # New global
                              ecm_strings_list, fit_method_str, fit_weight_str, fit_max_nfev_int, stop_event):
     logging.info("Starting Analysis Type 3 (ECM Fitting)...")
     if stop_event.is_set(): return "ECM Fitting Cancelled at Start"
@@ -776,8 +779,9 @@ def run_analysis_ecm_fitting(input_dir, output_dir, N_replicates_from_gui,
 # ---------------------------------------------------------
 def run_analysis_peak_tracking(input_dir, output_dir, N_replicates_from_gui,
                                apply_day0_norm_global, average_replicates_global, heatmap_norm_strategy,
-                               custom_title_prefix, include_auto_titles, custom_x_labels, custom_x_axis_title, 
-                               min_freq_peak, max_freq_peak, stop_event):
+                               custom_title_prefix, include_auto_titles, custom_x_labels, custom_x_axis_title, # New global
+                               min_freq_peak, max_freq_peak, # A4 specific
+                               stop_event):
     logging.info("Starting Analysis Type 4 (Peak Tracking)...")
     if stop_event.is_set(): return "Peak Tracking Cancelled at Start"
     N_replicates = detect_num_replicates(input_dir, N_replicates_from_gui)
@@ -823,7 +827,7 @@ def run_analysis_peak_tracking(input_dir, output_dir, N_replicates_from_gui,
                 Zreal_vals = Zreal_vals_orig[valid_indices]
 
                 c_img_calc = np.array([ (zr / (2*np.pi*f*zm**2)) if (f!=0 and zm!=0) else np.nan for zr,f,zm in zip(Zreal_vals, freqs_hz, Zmod_vals) ])
-                # Cimg cutoff factor replaced with full (frequency-filtered) c_img_calc for peak finding
+                # No Cimg cutoff factor now, using full (frequency-filtered) c_img_calc for peak finding
 
                 file_peak_data = {'day': day_val, 'replicate_id': current_replicate_id, 'Freq_Zphz': np.nan, 'Val_Zphz': np.nan, 'Freq_Cimg': np.nan, 'Val_Cimg': np.nan}
                 if len(negZphz_vals)>0 and not pd.Series(negZphz_vals).isna().all(): 
@@ -927,7 +931,7 @@ def run_analysis_peak_tracking(input_dir, output_dir, N_replicates_from_gui,
 
 
 # ---------------------------------------------------------
-# Tkinter GUI Application (EISAnalysisApp class)
+# --- Tkinter GUI Application ---
 # ---------------------------------------------------------
 class TextHandler(logging.Handler):
     def __init__(self, log_queue):
@@ -965,7 +969,7 @@ class EISAnalysisApp:
         ttk.Label(general_frame, text="Replicates:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2); self.replicates_gui_var = tk.IntVar(value=3); ttk.Spinbox(general_frame, from_=1, to=100, textvariable=self.replicates_gui_var, width=10).grid(row=2, column=1, sticky=tk.W, pady=2)
         self.apply_day0_global_var = tk.BooleanVar(value=False); ttk.Checkbutton(general_frame, text="Apply Day 0 Normalization", variable=self.apply_day0_global_var).grid(row=3, column=0, sticky=tk.W, padx=5, pady=2) # columnspan removed
         self.average_replicates_global_var = tk.BooleanVar(value=True); ttk.Checkbutton(general_frame, text="Average Replicates", variable=self.average_replicates_global_var).grid(row=3, column=1, sticky=tk.W, padx=5, pady=2) # Next to Day0
-        ttk.Label(general_frame, text="Heatmap Norm Strategy:").grid(row=4, column=0, sticky=tk.W, padx=5, pady=2); self.heatmap_norm_strategy_var = tk.StringVar(); self.heatmap_norm_options = ["Raw Values", "By Parameter (Column-wise)", "Global Max Scaling", "Frequency Domain (Low/Mid/High)"]
+        ttk.Label(general_frame, text="Heatmap Norm Strategy:").grid(row=4, column=0, sticky=tk.W, padx=5, pady=2); self.heatmap_norm_strategy_var = tk.StringVar(); self.heatmap_norm_options = ["Raw Values", "Per Parameter/Timeline (Column-wise)", "Global Max Scaling", "Frequency Domain (Low/Mid/High)"]
         self.heatmap_norm_combo = ttk.Combobox(general_frame, textvariable=self.heatmap_norm_strategy_var, values=self.heatmap_norm_options, state="readonly"); self.heatmap_norm_combo.grid(row=4, column=1, columnspan=2, sticky=tk.EW, pady=2); self.heatmap_norm_combo.set(self.heatmap_norm_options[1])
         ttk.Label(general_frame, text="Custom Plot Title Prefix:").grid(row=5, column=0, sticky=tk.W, padx=5, pady=2); self.custom_title_prefix_var = tk.StringVar(); ttk.Entry(general_frame, textvariable=self.custom_title_prefix_var).grid(row=5, column=1, columnspan=2, sticky=tk.EW, pady=2)
         self.include_auto_titles_var = tk.BooleanVar(value=True); ttk.Checkbutton(general_frame, text="Include Auto-gen Suffix in Titles", variable=self.include_auto_titles_var).grid(row=6, column=0, columnspan=2, sticky=tk.W, padx=5, pady=2)
@@ -1166,7 +1170,7 @@ class EISAnalysisApp:
             self.analysis_thread = None
 
 # ---------------------------------------------------------
-# MAIN EXECUTION ---
+# --- MAIN EXECUTION ---
 # ---------------------------------------------------------
 if __name__ == '__main__':
     root = tk.Tk()
